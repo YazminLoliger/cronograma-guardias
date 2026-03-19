@@ -25,6 +25,7 @@
   const startTimeInput = document.getElementById('start-time');
   const endTimeInput = document.getElementById('end-time');
   const registerBtn = document.getElementById('register-btn');
+  const uploadAllCalendarBtn = document.getElementById('upload-all-calendar-btn');
   const resetBtn = document.getElementById('form-reset-btn');
   const tableContent = document.getElementById('table-content');
   const tableBadge = document.getElementById('table-badge');
@@ -67,6 +68,7 @@
       e.preventDefault();
       handleRegister();
     });
+    uploadAllCalendarBtn.addEventListener('click', handleUploadAllToCalendar);
     resetBtn.addEventListener('click', handleReset);
     saveCalendarBtn.addEventListener('click', handleSaveCalendar);
     modalCancel.addEventListener('click', closeModal);
@@ -74,6 +76,18 @@
     modalOverlay.addEventListener('click', (e) => {
       if (e.target === modalOverlay) closeModal();
     });
+
+    // Time Input Masks
+    startTimeInput.addEventListener('input', maskTimeInput);
+    endTimeInput.addEventListener('input', maskTimeInput);
+  }
+
+  function maskTimeInput(e) {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.length > 2) {
+      val = val.substring(0, 2) + ':' + val.substring(2, 4);
+    }
+    e.target.value = val;
   }
 
   // ──────────────────────────────────
@@ -206,6 +220,42 @@
     return url;
   }
 
+  function formatIcsDate(dateStr, timeStr) {
+    return dateStr.replace(/-/g, '') + 'T' + timeStr.replace(/:/g, '') + '00';
+  }
+
+  function handleUploadAllToCalendar() {
+    if (guards.length === 0) {
+      showToast('No hay guardias registradas', 'error');
+      return;
+    }
+
+    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//GuardiasApp//ES\nCALSCALE:GREGORIAN\n";
+    
+    guards.forEach(guard => {
+      icsContent += "BEGIN:VEVENT\n";
+      icsContent += `UID:${guard.id}@guardias.local\n`;
+      icsContent += `SUMMARY:${guard.agentName}\n`;
+      icsContent += `DTSTART:${formatIcsDate(guard.startDate, guard.startTime)}\n`;
+      icsContent += `DTEND:${formatIcsDate(guard.endDate, guard.endTime)}\n`;
+      icsContent += `DESCRIPTION:Guardia de Sistemas — ${guard.agentName}\n`;
+      icsContent += "END:VEVENT\n";
+    });
+
+    icsContent += "END:VCALENDAR";
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cronograma_guardias.ics';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Descargando ${guards.length} guardias. Abrí el archivo importarlo sin duplicados.`, 'success');
+  }
 
   function sendToCalendar(id) {
     const guard = guards.find(g => g.id === id);
