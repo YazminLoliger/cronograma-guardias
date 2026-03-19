@@ -224,37 +224,43 @@
     return dateStr.replace(/-/g, '') + 'T' + timeStr.replace(/:/g, '') + '00';
   }
 
-  function handleUploadAllToCalendar() {
+  async function handleUploadAllToCalendar() {
     if (guards.length === 0) {
       showToast('No hay guardias registradas', 'error');
       return;
     }
 
-    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//GuardiasApp//ES\nCALSCALE:GREGORIAN\n";
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwCMnXJ9xeXOXALtNXesyiAEGKt4bd5NrT3jpD2qHob-8PmTHM-rc-_5ZLWfvNrx_Ej/exec';
     
-    guards.forEach(guard => {
-      icsContent += "BEGIN:VEVENT\n";
-      icsContent += `UID:${guard.id}@guardias.local\n`;
-      icsContent += `SUMMARY:${guard.agentName}\n`;
-      icsContent += `DTSTART:${formatIcsDate(guard.startDate, guard.startTime)}\n`;
-      icsContent += `DTEND:${formatIcsDate(guard.endDate, guard.endTime)}\n`;
-      icsContent += `DESCRIPTION:Guardia de Sistemas — ${guard.agentName}\n`;
-      icsContent += "END:VEVENT\n";
-    });
+    uploadAllCalendarBtn.disabled = true;
+    const originalText = uploadAllCalendarBtn.innerHTML;
+    uploadAllCalendarBtn.innerHTML = '⏳ Subiendo...';
+    showToast('Conectando con Google Calendar...', 'info');
 
-    icsContent += "END:VCALENDAR";
-
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'cronograma_guardias.ics';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    showToast(`Descargando ${guards.length} guardias. Abrí el archivo importarlo sin duplicados.`, 'success');
+    try {
+      const response = await fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(guards)
+      });
+      
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        showToast(`¡Listo! ${result.added} nuevas subidas, ${result.skipped} omitidas (ya existían).`, 'success');
+      } else {
+        showToast('Error de Apps Script: ' + result.message, 'error');
+      }
+    } catch (error) {
+      showToast('Navegador bloqueó respuesta CORS o hubo error de red.', 'error');
+      // A veces Apps Script bloquea el CORS de lectura pero la subida se hace igual.
+      console.error(error);
+    } finally {
+      uploadAllCalendarBtn.disabled = false;
+      uploadAllCalendarBtn.innerHTML = originalText;
+    }
   }
 
   function sendToCalendar(id) {
