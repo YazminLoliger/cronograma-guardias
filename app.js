@@ -334,9 +334,9 @@
     }
 
     const sorted = [...guards].sort((a, b) => {
-      const dateComp = b.startDate.localeCompare(a.startDate);
+      const dateComp = a.startDate.localeCompare(b.startDate);
       if (dateComp !== 0) return dateComp;
-      return b.startTime.localeCompare(a.startTime);
+      return a.startTime.localeCompare(b.startTime);
     });
 
     const rows = sorted.map(g => {
