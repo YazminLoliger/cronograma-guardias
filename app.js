@@ -25,7 +25,6 @@
   const startTimeInput = document.getElementById('start-time');
   const endTimeInput = document.getElementById('end-time');
   const registerBtn = document.getElementById('register-btn');
-  const uploadAllCalendarBtn = document.getElementById('upload-all-calendar-btn');
   const resetBtn = document.getElementById('form-reset-btn');
   const tableContent = document.getElementById('table-content');
   const tableBadge = document.getElementById('table-badge');
@@ -68,7 +67,6 @@
       e.preventDefault();
       handleRegister();
     });
-    uploadAllCalendarBtn.addEventListener('click', handleUploadAllToCalendar);
     resetBtn.addEventListener('click', handleReset);
     saveCalendarBtn.addEventListener('click', handleSaveCalendar);
     modalCancel.addEventListener('click', closeModal);
@@ -186,7 +184,7 @@
   }
 
   // ──────────────────────────────────
-  // Google Calendar — Batch Upload
+  // Google Calendar
   // ──────────────────────────────────
   function buildCalendarUrl(guard) {
     const startDT = guard.startDate.replace(/-/g, '') + 'T' + guard.startTime.replace(/:/g, '') + '00';
@@ -208,41 +206,6 @@
     return url;
   }
 
-  function handleUploadAllToCalendar() {
-    if (guards.length === 0) {
-      showToast('No hay guardias registradas para subir', 'error');
-      return;
-    }
-
-    let blockedCount = 0;
-    let openedCount = 0;
-
-    guards.forEach((guard) => {
-      const url = buildCalendarUrl(guard);
-      const newWin = window.open(url, '_blank');
-      
-      // Check if browser blocked the new tab
-      if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
-        blockedCount++;
-      } else {
-        openedCount++;
-      }
-    });
-
-    if (blockedCount > 0) {
-      alert(
-        `⚠️ Tu navegador bloqueó la apertura de ${blockedCount} pestañas de Google Calendar por una medida de seguridad (Bloqueador de ventanas emergentes).\n\n` +
-        `Para solucionarlo:\n` +
-        `1. Mirá arriba, en la barra de direcciones de tu navegador (donde dice file://...).\n` +
-        `2. Buscá a la derecha un pequeño ícono con una CRUZ ROJA.\n` +
-        `3. Hacé clic en ese ícono y seleccioná "Permitir siempre ventanas emergentes...".\n` +
-        `4. Dale a Listo y volvé a apretar este botón de "Subir todas a Calendar".`
-      );
-      showToast('Apertura bloqueada por el navegador. Habilitá los popups.', 'error');
-    } else {
-      showToast(`Abriendo ${openedCount} eventos correctament`, 'success');
-    }
-  }
 
   function sendToCalendar(id) {
     const guard = guards.find(g => g.id === id);
