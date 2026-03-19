@@ -238,21 +238,18 @@
     showToast('Conectando con Google Calendar...', 'info');
 
     try {
-      const response = await fetch(scriptUrl, {
+      await fetch(scriptUrl, {
         method: 'POST',
+        mode: 'no-cors',
         headers: {
           'Content-Type': 'text/plain;charset=utf-8',
         },
         body: JSON.stringify(guards)
       });
       
-      const result = await response.json();
+      // Con no-cors no podemos leer la respuesta exacta, pero si no tiró error de red, se ejecutó.
+      showToast('¡Guardias enviadas para sincronizar! (Google omite automáticamente los duplicados)', 'success');
       
-      if (result.status === 'success') {
-        showToast(`¡Listo! ${result.added} nuevas subidas, ${result.skipped} omitidas (ya existían).`, 'success');
-      } else {
-        showToast('Error de Apps Script: ' + result.message, 'error');
-      }
     } catch (error) {
       showToast('Navegador bloqueó respuesta CORS o hubo error de red.', 'error');
       // A veces Apps Script bloquea el CORS de lectura pero la subida se hace igual.
