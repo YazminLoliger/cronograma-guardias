@@ -224,40 +224,39 @@
     return dateStr.replace(/-/g, '') + 'T' + timeStr.replace(/:/g, '') + '00';
   }
 
-  async function handleUploadAllToCalendar() {
+  function handleUploadAllToCalendar() {
     if (guards.length === 0) {
       showToast('No hay guardias registradas', 'error');
       return;
     }
 
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwCMnXJ9xeXOXALtNXesyiAEGKt4bd5NrT3jpD2qHob-8PmTHM-rc-_5ZLWfvNrx_Ej/exec';
-    
+    const n8nWebhookUrl = 'https://empredimientos-crown.app.n8n.cloud/webhook/18c4cc38-18a8-4413-a2ce-aefdaccba134';
+
     uploadAllCalendarBtn.disabled = true;
     const originalText = uploadAllCalendarBtn.innerHTML;
     uploadAllCalendarBtn.innerHTML = '⏳ Subiendo...';
-    showToast('Conectando con Google Calendar...', 'info');
+    showToast('Conectando con Google Calendar vía n8n...', 'info');
 
-    try {
-      await fetch(scriptUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify(guards)
-      });
-      
-      // Con no-cors no podemos leer la respuesta exacta, pero si no tiró error de red, se ejecutó.
-      showToast('¡Guardias enviadas para sincronizar! (Google omite automáticamente los duplicados)', 'success');
-      
-    } catch (error) {
-      showToast('Navegador bloqueó respuesta CORS o hubo error de red.', 'error');
-      // A veces Apps Script bloquea el CORS de lectura pero la subida se hace igual.
+    fetch(n8nWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(guards)
+    })
+    .then(response => {
+      if (response.ok) {
+        showToast(`¡${guards.length} guardias enviadas a Google Calendar!`, 'success');
+      } else {
+        showToast('Error al enviar: ' + response.statusText, 'error');
+      }
+    })
+    .catch(error => {
+      showToast('Error de conexión con n8n: ' + error.message, 'error');
       console.error(error);
-    } finally {
+    })
+    .finally(() => {
       uploadAllCalendarBtn.disabled = false;
       uploadAllCalendarBtn.innerHTML = originalText;
-    }
+    });
   }
 
   function sendToCalendar(id) {
