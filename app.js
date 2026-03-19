@@ -230,6 +230,12 @@
       return;
     }
 
+    const calendarId = localStorage.getItem(CALENDAR_LINK_KEY) || '';
+    if (!calendarId) {
+      showToast('Primero configurá un calendario en la barra superior', 'error');
+      return;
+    }
+
     const n8nWebhookUrl = 'https://empredimientos-crown.app.n8n.cloud/webhook/18c4cc38-18a8-4413-a2ce-aefdaccba134';
 
     uploadAllCalendarBtn.disabled = true;
@@ -240,7 +246,7 @@
     fetch(n8nWebhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(guards)
+      body: JSON.stringify({ calendarId, guards })
     })
     .then(response => {
       if (response.ok) {
