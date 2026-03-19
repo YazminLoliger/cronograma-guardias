@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Cronograma de guardias de técnicos de sistemas con integración a Google Calendar">
+  <title>Cronograma de Guardias — Técnicos de Sistemas</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+</head>
+<body>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Confirm Delete Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <h3 class="modal__title">¿Eliminar guardia?</h3>
+      <p class="modal__text" id="modal-text">Esta acción no se puede deshacer. La guardia será eliminada del cronograma local.</p>
+      <div class="modal__actions">
+        <button class="btn btn--secondary" id="modal-cancel">Cancelar</button>
+        <button class="btn btn--danger" id="modal-confirm">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container">
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="app-header__icon">🛡️</div>
+      <h1 class="app-header__title">Cronograma de Guardias</h1>
+    </header>
+
+    <!-- Calendar Config -->
+    <div class="config-bar" id="config-bar">
+      <span class="config-bar__label">📅 Calendar</span>
+      <input
+        type="text"
+        class="config-bar__input"
+        id="calendar-link"
+        placeholder="Pegá el link del calendario compartido de Google Calendar"
+        autocomplete="off"
+      >
+      <button class="btn btn--sm btn--secondary" id="save-calendar-btn">Guardar</button>
+      <div class="config-bar__status config-bar__status--disconnected" id="calendar-status" title="Sin calendar configurado"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat-card">
+        <div class="stat-card__value" id="stat-total">0</div>
+        <div class="stat-card__label">Total Guardias</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__value" id="stat-agents">0</div>
+        <div class="stat-card__label">Agentes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__value" id="stat-active">0</div>
+        <div class="stat-card__label">Activas Hoy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__value" id="stat-upcoming">0</div>
+        <div class="stat-card__label">Próximas</div>
+      </div>
+    </div>
+
+    <!-- New Guard Form -->
+    <section class="glass-card glass-card--accent" id="form-section">
+      <div class="card-header">
+        <span class="card-header__icon">📋</span>
+        <h2 class="card-header__title">Registrar Guardia</h2>
+      </div>
+
+      <form id="guard-form" novalidate>
+        <div class="form-grid">
+          <div class="form-group form-group--full">
+            <label class="form-label" for="agent-name">Nombre del Agente</label>
+            <input
+              type="text"
+              class="form-input"
+              id="agent-name"
+              placeholder="Ej: Juan Pérez"
+              autocomplete="off"
+              required
+            >
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="start-date">Fecha Inicio</label>
+          <input type="date" class="form-input" id="start-date" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="end-date">Fecha Fin</label>
+          <input type="date" class="form-input" id="end-date" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="start-time">Hora Inicio</label>
+          <input type="time" class="form-input" id="start-time" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="end-time">Hora Fin</label>
+          <input type="time" class="form-input" id="end-time" required>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="reset" class="btn btn--secondary" id="form-reset-btn">
+          ✕ Limpiar
+        </button>
+        <button type="submit" class="btn btn--primary" id="register-btn">
+          📋 Registrar Guardia
+        </button>
+      </div>
+      </form>
+    </section>
+
+    <!-- Guard Table -->
+    <section class="glass-card section-gap" id="table-section">
+      <div class="card-header">
+        <span class="card-header__icon">📅</span>
+        <h2 class="card-header__title">Cronograma de Guardias</h2>
+        <div class="card-header__actions">
+          <button type="button" class="btn btn--sm btn--calendar-upload" id="upload-all-calendar-btn" title="Subir TODAS las guardias del cronograma a Calendar">
+            📅 Subir todas a Calendar
+          </button>
+          <span class="card-header__badge" id="table-badge">0 registros</span>
+        </div>
+      </div>
+
+      <div id="table-content">
+        <!-- Dynamic content: table or empty state -->
+      </div>
+    </section>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
