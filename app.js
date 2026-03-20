@@ -72,9 +72,19 @@ const guardsCollection = collection(db, "guards");
   }
 
   function setDefaultDates() {
-    const today = new Date().toISOString().split('T')[0];
-    if (!startDateInput.value) startDateInput.value = today;
-    if (!endDateInput.value) endDateInput.value = today;
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const formatDt = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    if (!startDateInput.value) startDateInput.value = formatDt(today);
+    if (!endDateInput.value) endDateInput.value = formatDt(tomorrow);
   }
 
   function bindEvents() {
@@ -91,17 +101,18 @@ const guardsCollection = collection(db, "guards");
       if (e.target === modalOverlay) closeModal();
     });
 
-    // Time Input Masks
-    startTimeInput.addEventListener('input', maskTimeInput);
-    endTimeInput.addEventListener('input', maskTimeInput);
-  }
-
-  function maskTimeInput(e) {
-    let val = e.target.value.replace(/\D/g, '');
-    if (val.length > 2) {
-      val = val.substring(0, 2) + ':' + val.substring(2, 4);
-    }
-    e.target.value = val;
+    // Auto-advance end date to next day based on static times
+    startDateInput.addEventListener('change', (e) => {
+      if (e.target.value) {
+        const [y, m, d] = e.target.value.split('-');
+        const nextDay = new Date(y, m - 1, d);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const y2 = nextDay.getFullYear();
+        const m2 = String(nextDay.getMonth() + 1).padStart(2, '0');
+        const d2 = String(nextDay.getDate()).padStart(2, '0');
+        endDateInput.value = `${y2}-${m2}-${d2}`;
+      }
+    });
   }
 
   // ──────────────────────────────────
@@ -195,6 +206,17 @@ const guardsCollection = collection(db, "guards");
 
     if (endDT <= startDT) {
       showToast('La fecha/hora de fin debe ser posterior al inicio', 'error');
+      return;
+    }
+
+    const isDuplicate = guards.some(g => 
+      g.agentName.toLowerCase() === agentName.toLowerCase() && 
+      g.startDate === startDate
+    );
+
+    if (isDuplicate) {
+      showToast('⚠️ Esta guardia ya está registrada para este agente en esa fecha', 'error');
+      agentNameInput.focus();
       return;
     }
 
@@ -328,9 +350,25 @@ const guardsCollection = collection(db, "guards");
 
   function handleConfirmDelete() {
     if (deleteTargetId) {
+      const guardToDelete = guards.find(g => g.id === deleteTargetId);
+      
       deleteGuardFromFirebase(deleteTargetId);
       showToast('Guardia eliminada', 'info');
+
+      // Notificar a n8n para borrar de Calendar
+      const calendarId = localStorage.getItem(CALENDAR_LINK_KEY) || '';
+      if (calendarId && guardToDelete) {
+        const n8nWebhookUrl = 'https://empredimientos-crown.app.n8n.cloud/webhook/18c4cc38-18a8-4413-a2ce-aefdaccba134';
+        try {
+          fetch(n8nWebhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', calendarId, guard: guardToDelete })
+          });
+        } catch(e) { console.error('Error enviando delete a n8n', e); }
+      }
     }
+    deleteTargetId = null;
     closeModal();
   }
 
