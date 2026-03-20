@@ -340,6 +340,10 @@ const guardsCollection = collection(db, "guards");
         
         if (response.ok) {
           showToast(`¡Ciclo generado y mandado a Calendar!`, 'success');
+          const nowMs = Date.now();
+          for (const g of newlyCreatedGuards) {
+            await updateDoc(doc(db, "guards", g.id), { uploadedAt: nowMs });
+          }
         } else {
           showToast('Guardadas en la web, pero falló envíar a Calendar', 'error');
         }
@@ -472,9 +476,15 @@ const guardsCollection = collection(db, "guards");
     return dateStr.replace(/-/g, '') + 'T' + timeStr.replace(/:/g, '') + '00';
   }
 
-  function handleUploadAllToCalendar() {
+  async function handleUploadAllToCalendar() {
     if (guards.length === 0) {
       showToast('No hay guardias registradas', 'error');
+      return;
+    }
+
+    const pendingGuards = guards.filter(g => !g.uploadedAt);
+    if (pendingGuards.length === 0) {
+      showToast('✅ Todas las guardias ya están sincronizadas con Calendar', 'info');
       return;
     }
 
@@ -489,28 +499,31 @@ const guardsCollection = collection(db, "guards");
     uploadAllCalendarBtn.disabled = true;
     const originalText = uploadAllCalendarBtn.innerHTML;
     uploadAllCalendarBtn.innerHTML = '⏳ Subiendo...';
-    showToast('Conectando con Google Calendar vía n8n...', 'info');
+    showToast(`Conectando con n8n para subir ${pendingGuards.length} guardias...`, 'info');
 
-    fetch(n8nWebhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ calendarId, guards })
-    })
-    .then(response => {
+    try {
+      const response = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calendarId, guards: pendingGuards })
+      });
+      
       if (response.ok) {
-        showToast(`¡${guards.length} guardias enviadas a Google Calendar!`, 'success');
+        showToast(`¡${pendingGuards.length} guardias enviadas a Google Calendar!`, 'success');
+        const nowMs = Date.now();
+        for (const g of pendingGuards) {
+          await updateDoc(doc(db, "guards", g.id), { uploadedAt: nowMs });
+        }
       } else {
         showToast('Error al enviar: ' + response.statusText, 'error');
       }
-    })
-    .catch(error => {
+    } catch (error) {
       showToast('Error de conexión con n8n: ' + error.message, 'error');
       console.error(error);
-    })
-    .finally(() => {
+    } finally {
       uploadAllCalendarBtn.disabled = false;
       uploadAllCalendarBtn.innerHTML = originalText;
-    });
+    }
   }
 
   function sendToCalendar(id) {
@@ -615,9 +628,12 @@ const guardsCollection = collection(db, "guards");
           <td>${g.startTime}</td>
           <td>${g.endTime}</td>
           <td>
-            <span class="status-pill status-pill--${status.class}">
-              ${status.icon} ${status.label}
-            </span>
+            <div style="display:flex; flex-direction:column; gap:0.4rem;">
+              <span class="status-pill status-pill--${status.class}">
+                ${status.icon} ${status.label}
+              </span>
+              ${g.uploadedAt ? '<span style="font-size: 0.72rem; color: #10b981; display:flex; align-items:center; gap:0.2rem; font-weight:600;" title="Sincronizado a n8n">✔️ Sincronizado</span>' : '<span style="font-size: 0.72rem; color: #f59e0b; display:flex; align-items:center; gap:0.2rem; font-weight:600;" title="Pendiente de subir a Calendar">⏳ Pendiente</span>'}
+            </div>
           </td>
           <td class="td-actions">
             <button class="btn btn--calendar btn--sm" onclick="sendToCalendar('${g.id}')" title="Enviar a Google Calendar">
