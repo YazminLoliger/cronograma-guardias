@@ -3,6 +3,22 @@
  * Multi-agent registration + batch Google Calendar upload
  */
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, collection, onSnapshot, setDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs",
+  authDomain: "guardias-8d35d.firebaseapp.com",
+  projectId: "guardias-8d35d",
+  storageBucket: "guardias-8d35d.firebasestorage.app",
+  messagingSenderId: "745431499410",
+  appId: "1:745431499410:web:12c75b9da8be8327a2dc4b"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const guardsCollection = collection(db, "guards");
+
 (function () {
   'use strict';
 
@@ -49,10 +65,8 @@
   // Initialization
   // ──────────────────────────────────
   function init() {
-    loadGuards();
+    loadGuards(); // This sets up the real-time Firebase listener
     loadCalendarUrl();
-    renderTable();
-    updateStats();
     bindEvents();
     setDefaultDates();
   }
@@ -126,19 +140,32 @@
   }
 
   // ──────────────────────────────────
-  // LocalStorage
+  // Firebase Sync
   // ──────────────────────────────────
   function loadGuards() {
+    onSnapshot(guardsCollection, (snapshot) => {
+      guards = snapshot.docs.map(document => document.data());
+      renderTable();
+      updateStats();
+    });
+  }
+
+  async function saveGuardToFirebase(guard) {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      guards = data ? JSON.parse(data) : [];
-    } catch {
-      guards = [];
+      await setDoc(doc(db, "guards", guard.id), guard);
+    } catch (error) {
+      console.error("Error guardando en Firebase:", error);
+      showToast('Error al guardar en Firebase (revisá credenciales/reglas)', 'error');
     }
   }
 
-  function saveGuards() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(guards));
+  async function deleteGuardFromFirebase(id) {
+    try {
+      await deleteDoc(doc(db, "guards", id));
+    } catch (error) {
+      console.error("Error eliminando de Firebase:", error);
+      showToast('Error al eliminar de Firebase', 'error');
+    }
   }
 
   // ──────────────────────────────────
@@ -181,11 +208,7 @@
       createdAt: new Date().toISOString()
     };
 
-    guards.push(newGuard);
-    saveGuards();
-    renderTable();
-    updateStats();
-
+    saveGuardToFirebase(newGuard);
     showToast(`Guardia registrada exitosamente`, 'success');
 
     // Keep dates, only clear agent name and times
@@ -305,10 +328,7 @@
 
   function handleConfirmDelete() {
     if (deleteTargetId) {
-      guards = guards.filter(g => g.id !== deleteTargetId);
-      saveGuards();
-      renderTable();
-      updateStats();
+      deleteGuardFromFirebase(deleteTargetId);
       showToast('Guardia eliminada', 'info');
     }
     closeModal();
