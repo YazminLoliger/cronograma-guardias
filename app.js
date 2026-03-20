@@ -4,7 +4,7 @@
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getFirestore, collection, onSnapshot, setDoc, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, setDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs",
@@ -30,7 +30,6 @@ const guardsCollection = collection(db, "guards");
 
   let guards = [];
   let deleteTargetId = null;
-  let rotationData = { agents: [], currentIndex: 0 };
 
   // ──────────────────────────────────
   // DOM References
@@ -56,11 +55,6 @@ const guardsCollection = collection(db, "guards");
   const saveCalendarBtn = document.getElementById('save-calendar-btn');
   const calendarStatus = document.getElementById('calendar-status');
 
-  // Rotation
-  const rotationList = document.getElementById('rotation-list');
-  const rotationForm = document.getElementById('rotation-form');
-  const newRotationAgent = document.getElementById('new-rotation-agent');
-
   // Stats
   const statTotal = document.getElementById('stat-total');
   const statAgents = document.getElementById('stat-agents');
@@ -72,7 +66,6 @@ const guardsCollection = collection(db, "guards");
   // ──────────────────────────────────
   function init() {
     loadGuards(); // This sets up the real-time Firebase listener
-    loadRotation(); // Listen to rotation config
     loadCalendarUrl();
     bindEvents();
     setDefaultDates();
@@ -99,9 +92,6 @@ const guardsCollection = collection(db, "guards");
       e.preventDefault();
       handleRegister();
     });
-    if (rotationForm) {
-      rotationForm.addEventListener('submit', handleAddRotationAgent);
-    }
     uploadAllCalendarBtn.addEventListener('click', handleUploadAllToCalendar);
     resetBtn.addEventListener('click', handleReset);
     saveCalendarBtn.addEventListener('click', handleSaveCalendar);
@@ -163,56 +153,6 @@ const guardsCollection = collection(db, "guards");
   // ──────────────────────────────────
   // Firebase Sync
   // ──────────────────────────────────
-  function loadRotation() {
-    onSnapshot(doc(db, "config", "rotation"), (document) => {
-      if (document.exists()) {
-        rotationData = document.data();
-        if (!rotationData.agents) rotationData.agents = [];
-      } else {
-        // Inicializar si no existe
-        rotationData = {
-          agents: ["@Nicolas", "@jld", "@Yaz", "@Bruno", "@Guillermo", "@lappiolaza", "@LeoFarra", "@ccastellaro"],
-          currentIndex: 3 // Bruno
-        };
-        setDoc(doc(db, "config", "rotation"), rotationData);
-      }
-      renderRotationList();
-    }, (error) => {
-      console.error("Error cargando rotación:", error);
-    });
-  }
-
-  function renderRotationList() {
-    if (!rotationList) return;
-    rotationList.innerHTML = rotationData.agents.map((agent, index) => {
-      const isCurrent = index === rotationData.currentIndex;
-      return `<li style="margin-bottom:0.5rem; ${isCurrent ? 'font-weight: bold; color: #3b82f6;' : ''}">
-        ${escapeHtml(agent)} ${isCurrent ? '<span style="font-size:0.7em; background:#3b82f6; color:#fff; padding:2px 6px; border-radius:4px; margin-left:8px;">Guardia Actual</span>' : ''}
-      </li>`;
-    }).join('');
-  }
-
-  async function handleAddRotationAgent(e) {
-    e.preventDefault();
-    if (!newRotationAgent) return;
-    let newAgent = newRotationAgent.value.trim();
-    if (!newAgent) return;
-
-    if (!newAgent.startsWith('@')) newAgent = '@' + newAgent;
-
-    try {
-      const newAgents = [...rotationData.agents, newAgent];
-      await updateDoc(doc(db, "config", "rotation"), {
-        agents: newAgents
-      });
-      newRotationAgent.value = '';
-      showToast('Agente agregado a la rotación', 'success');
-    } catch (error) {
-      console.error('Error agregando agente:', error);
-      showToast('Error al agregar el agente', 'error');
-    }
-  }
-
   function loadGuards() {
     onSnapshot(guardsCollection, (snapshot) => {
       guards = snapshot.docs.map(document => document.data());
