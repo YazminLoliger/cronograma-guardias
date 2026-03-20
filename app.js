@@ -60,6 +60,7 @@ const guardsCollection = collection(db, "guards");
   const rotationList = document.getElementById('rotation-list');
   const rotationForm = document.getElementById('rotation-form');
   const newRotationAgent = document.getElementById('new-rotation-agent');
+  const generateCycleBtn = document.getElementById('generate-cycle-btn');
 
   // Stats
   const statTotal = document.getElementById('stat-total');
@@ -101,6 +102,9 @@ const guardsCollection = collection(db, "guards");
     });
     if (rotationForm) {
       rotationForm.addEventListener('submit', handleAddRotationAgent);
+    }
+    if (generateCycleBtn) {
+      generateCycleBtn.addEventListener('click', handleGenerateCycle);
     }
     uploadAllCalendarBtn.addEventListener('click', handleUploadAllToCalendar);
     resetBtn.addEventListener('click', handleReset);
@@ -168,11 +172,23 @@ const guardsCollection = collection(db, "guards");
       if (document.exists()) {
         rotationData = document.data();
         if (!rotationData.agents) rotationData.agents = [];
+        
+        // Auto-remove @Yaz
+        const yazIndex = rotationData.agents.findIndex(a => a.toLowerCase() === '@yaz' || a.toLowerCase() === 'yaz');
+        if (yazIndex !== -1) {
+          rotationData.agents.splice(yazIndex, 1);
+          if (rotationData.currentIndex > yazIndex) rotationData.currentIndex--;
+          if (rotationData.currentIndex >= rotationData.agents.length) rotationData.currentIndex = 0;
+          updateDoc(doc(db, "config", "rotation"), {
+            agents: rotationData.agents,
+            currentIndex: rotationData.currentIndex
+          });
+        }
       } else {
         // Inicializar si no existe
         rotationData = {
-          agents: ["@Nicolas", "@jld", "@Yaz", "@Bruno", "@Guillermo", "@lappiolaza", "@LeoFarra", "@ccastellaro"],
-          currentIndex: 3 // Bruno
+          agents: ["@Nicolas", "@jld", "@Bruno", "@Guillermo", "@lappiolaza", "@LeoFarra", "@ccastellaro"],
+          currentIndex: 2 // Bruno (Index cambió sin Yaz)
         };
         setDoc(doc(db, "config", "rotation"), rotationData);
       }
@@ -186,11 +202,36 @@ const guardsCollection = collection(db, "guards");
     if (!rotationList) return;
     rotationList.innerHTML = rotationData.agents.map((agent, index) => {
       const isCurrent = index === rotationData.currentIndex;
-      return `<li style="margin-bottom:0.5rem; ${isCurrent ? 'font-weight: bold; color: #3b82f6;' : ''}">
-        ${escapeHtml(agent)} ${isCurrent ? '<span style="font-size:0.7em; background:#3b82f6; color:#fff; padding:2px 6px; border-radius:4px; margin-left:8px;">Guardia Actual</span>' : ''}
+      return `<li style="margin-bottom:0.8rem; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem; ${isCurrent ? 'font-weight: bold; color: #3b82f6;' : ''}">
+        <span>
+          ${escapeHtml(agent)} 
+          ${isCurrent ? '<span style="font-size:0.7em; background:#3b82f6; color:#fff; padding:2px 6px; border-radius:4px; margin-left:8px;">Guardia Actual</span>' : ''}
+        </span>
+        <button type="button" class="btn btn--sm btn--danger" onclick="deleteRotationAgent(${index})" style="padding: 2px 8px; font-size: 0.8rem;" title="Eliminar de rotación">🗑️</button>
       </li>`;
     }).join('');
   }
+
+  window.deleteRotationAgent = async function(index) {
+    if (!confirm(`¿Seguro que querés eliminar a ${rotationData.agents[index]} de la rotación automática?`)) return;
+    try {
+      let newAgents = [...rotationData.agents];
+      newAgents.splice(index, 1);
+      
+      let newIndex = rotationData.currentIndex;
+      if (newIndex > index) newIndex--;
+      if (newIndex >= newAgents.length) newIndex = 0;
+      
+      await updateDoc(doc(db, "config", "rotation"), {
+        agents: newAgents,
+        currentIndex: newIndex
+      });
+      showToast('Agente eliminado de la rotación', 'info');
+    } catch (error) {
+      console.error('Error eliminando agente:', error);
+      showToast('Error al eliminar', 'error');
+    }
+  };
 
   async function handleAddRotationAgent(e) {
     e.preventDefault();
@@ -210,6 +251,100 @@ const guardsCollection = collection(db, "guards");
     } catch (error) {
       console.error('Error agregando agente:', error);
       showToast('Error al agregar el agente', 'error');
+    }
+  }
+
+  async function handleGenerateCycle() {
+    if (!rotationData.agents || rotationData.agents.length === 0) {
+      showToast('La lista de rotación está vacía', 'error');
+      return;
+    }
+
+    const calendarId = localStorage.getItem(CALENDAR_LINK_KEY) || '';
+    if (!calendarId) {
+      showToast('Primero configurá un calendario en la barra superior', 'error');
+      return;
+    }
+
+    const originalText = generateCycleBtn.innerHTML;
+    generateCycleBtn.disabled = true;
+    generateCycleBtn.innerHTML = '⏳ Generando Guardias...';
+    
+    try {
+      const n8nWebhookUrl = 'https://empredimientos-crown.app.n8n.cloud/webhook/18c4cc38-18a8-4413-a2ce-aefdaccba134';
+      let newlyCreatedGuards = [];
+
+      const now = new Date();
+      const currentDay = now.getDay();
+      const diff = now.getDate() - currentDay + (currentDay === 0 ? -6 : 1); 
+      let baseMonday = new Date(now.setDate(diff));
+
+      const formatDt = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      for (let i = 0; i < rotationData.agents.length; i++) {
+        const agentIndex = (rotationData.currentIndex + i) % rotationData.agents.length;
+        const agentName = rotationData.agents[agentIndex];
+
+        let startD = new Date(baseMonday.getTime());
+        startD.setDate(startD.getDate() + (i * 7));
+        
+        let endD = new Date(startD.getTime());
+        endD.setDate(endD.getDate() + 7);
+
+        const startDateStr = formatDt(startD);
+        const endDateStr = formatDt(endD);
+
+        // Check if already exists in global 'guards' array (by name and startDate)
+        const exists = guards.some(g => 
+          g.agentName.toLowerCase() === agentName.toLowerCase() && 
+          g.startDate === startDateStr
+        );
+
+        if (!exists) {
+          const newGuard = {
+            id: generateId(),
+            agentName,
+            startDate: startDateStr,
+            endDate: endDateStr,
+            startTime: "08:00",
+            endTime: "08:00",
+            createdAt: new Date().toISOString()
+          };
+          
+          await saveGuardToFirebase(newGuard);
+          newlyCreatedGuards.push(newGuard);
+        }
+      }
+
+      if (newlyCreatedGuards.length > 0) {
+        showToast(`Se grabaron ${newlyCreatedGuards.length} nuevas guardias. Subiendo a Calendar 🔥...`, 'info');
+        // Push only the new ones to Calendar
+        const response = await fetch(n8nWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ calendarId, guards: newlyCreatedGuards })
+        });
+        
+        if (response.ok) {
+          showToast(`¡Ciclo generado y mandado a Calendar!`, 'success');
+        } else {
+          showToast('Guardadas en la web, pero falló envíar a Calendar', 'error');
+        }
+      } else {
+        showToast('Todo el ciclo actual ya estaba generado previamente.', 'info');
+      }
+
+    } catch (e) {
+      console.error(e);
+      showToast('Error generando ciclo: ' + e.message, 'error');
+    } finally {
+      generateCycleBtn.disabled = false;
+      generateCycleBtn.innerHTML = originalText;
     }
   }
 
