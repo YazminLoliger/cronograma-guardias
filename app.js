@@ -241,6 +241,14 @@ const guardsCollection = collection(db, "guards");
 
     if (!newAgent.startsWith('@')) newAgent = '@' + newAgent;
 
+    const lowerNewAgent = newAgent.toLowerCase();
+    const exists = rotationData.agents.some(a => a.toLowerCase() === lowerNewAgent);
+    if (exists) {
+      showToast('Ese agente ya está en la lista de rotación', 'error');
+      newRotationAgent.focus();
+      return;
+    }
+
     try {
       const newAgents = [...rotationData.agents, newAgent];
       await updateDoc(doc(db, "config", "rotation"), {
