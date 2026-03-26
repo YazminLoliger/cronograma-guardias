@@ -138,11 +138,6 @@
           <button type="submit" class="btn btn--secondary" id="add-rotation-btn">Añadir</button>
         </form>
 
-        <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem;">
-          <button type="button" class="btn btn--calendar" id="generate-cycle-btn" style="width: 100%; font-weight: bold; padding: 0.75rem;">
-            ⚡ Registrar Guardias
-          </button>
-        </div>
       </div>
     </section>
 
@@ -152,6 +147,9 @@
         <span class="card-header__icon">📅</span>
         <h2 class="card-header__title">Cronograma de Guardias</h2>
         <div class="card-header__actions">
+          <button type="button" class="btn btn--sm btn--secondary" id="download-csv-btn" title="Descargar en formato CSV">
+            📥 Exportar CSV
+          </button>
           <button type="button" class="btn btn--sm btn--calendar-upload" id="upload-all-calendar-btn" title="Subir a Calendar con Apps Script">
             📅 Subir todas a Calendar
           </button>

@@ -60,7 +60,7 @@ const guardsCollection = collection(db, "guards");
   const rotationList = document.getElementById('rotation-list');
   const rotationForm = document.getElementById('rotation-form');
   const newRotationAgent = document.getElementById('new-rotation-agent');
-  const generateCycleBtn = document.getElementById('generate-cycle-btn');
+  const downloadCsvBtn = document.getElementById('download-csv-btn');
 
   // Stats
   const statTotal = document.getElementById('stat-total');
@@ -103,8 +103,8 @@ const guardsCollection = collection(db, "guards");
     if (rotationForm) {
       rotationForm.addEventListener('submit', handleAddRotationAgent);
     }
-    if (generateCycleBtn) {
-      generateCycleBtn.addEventListener('click', handleGenerateCycle);
+    if (downloadCsvBtn) {
+      downloadCsvBtn.addEventListener('click', handleDownloadCsv);
     }
     uploadAllCalendarBtn.addEventListener('click', handleUploadAllToCalendar);
     resetBtn.addEventListener('click', handleReset);
@@ -262,102 +262,32 @@ const guardsCollection = collection(db, "guards");
     }
   }
 
-  async function handleGenerateCycle() {
-    if (!rotationData.agents || rotationData.agents.length === 0) {
-      showToast('La lista de rotación está vacía', 'error');
+  function handleDownloadCsv() {
+    if (guards.length === 0) {
+      showToast('No hay guardias para exportar', 'error');
       return;
     }
 
-    const calendarId = localStorage.getItem(CALENDAR_LINK_KEY) || '';
-    if (!calendarId) {
-      showToast('Primero configurá un calendario en la barra superior', 'error');
-      return;
-    }
+    const headers = ["ID", "Agente", "Fecha Inicio", "Fecha Fin", "Hora Inicio", "Hora Fin", "Sincronizado a Calendar"];
+    const rows = guards.map(g => [
+      g.id,
+      g.agentName,
+      g.startDate,
+      g.endDate,
+      g.startTime,
+      g.endTime,
+      g.uploadedAt ? "Si" : "No"
+    ].map(v => `"${v}"`).join(","));
 
-    const originalText = generateCycleBtn.innerHTML;
-    generateCycleBtn.disabled = true;
-    generateCycleBtn.innerHTML = '⏳ Generando Guardias...';
-    
-    try {
-      const n8nWebhookUrl = 'https://empredimientos-crown.app.n8n.cloud/webhook/18c4cc38-18a8-4413-a2ce-aefdaccba134';
-      let newlyCreatedGuards = [];
-
-      const now = new Date();
-      const currentDay = now.getDay();
-      const diff = now.getDate() - currentDay + (currentDay === 0 ? -6 : 1); 
-      let baseMonday = new Date(now.setDate(diff));
-
-      const formatDt = (d) => {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${day}`;
-      };
-
-      for (let i = 0; i < rotationData.agents.length; i++) {
-        const agentIndex = (rotationData.currentIndex + i) % rotationData.agents.length;
-        const agentName = rotationData.agents[agentIndex];
-
-        let startD = new Date(baseMonday.getTime());
-        startD.setDate(startD.getDate() + (i * 7));
-        
-        let endD = new Date(startD.getTime());
-        endD.setDate(endD.getDate() + 7);
-
-        const startDateStr = formatDt(startD);
-        const endDateStr = formatDt(endD);
-
-        // Check if already exists in global 'guards' array (by name and startDate)
-        const exists = guards.some(g => 
-          g.agentName.toLowerCase() === agentName.toLowerCase() && 
-          g.startDate === startDateStr
-        );
-
-        if (!exists) {
-          const newGuard = {
-            id: generateId(),
-            agentName,
-            startDate: startDateStr,
-            endDate: endDateStr,
-            startTime: "08:00",
-            endTime: "08:00",
-            createdAt: new Date().toISOString()
-          };
-          
-          await saveGuardToFirebase(newGuard);
-          newlyCreatedGuards.push(newGuard);
-        }
-      }
-
-      if (newlyCreatedGuards.length > 0) {
-        showToast(`Se grabaron ${newlyCreatedGuards.length} nuevas guardias. Subiendo a Calendar 🔥...`, 'info');
-        // Push only the new ones to Calendar
-        const response = await fetch(n8nWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ calendarId, guards: newlyCreatedGuards })
-        });
-        
-        if (response.ok) {
-          showToast(`¡Ciclo generado y mandado a Calendar!`, 'success');
-          const nowMs = Date.now();
-          for (const g of newlyCreatedGuards) {
-            await updateDoc(doc(db, "guards", g.id), { uploadedAt: nowMs });
-          }
-        } else {
-          showToast('Guardadas en la web, pero falló envíar a Calendar', 'error');
-        }
-      } else {
-        showToast('Todo el ciclo actual ya estaba generado previamente.', 'info');
-      }
-
-    } catch (e) {
-      console.error(e);
-      showToast('Error generando ciclo: ' + e.message, 'error');
-    } finally {
-      generateCycleBtn.disabled = false;
-      generateCycleBtn.innerHTML = originalText;
-    }
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `guardias_backup_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Archivo CSV descargado ✅', 'success');
   }
 
   function loadGuards() {
