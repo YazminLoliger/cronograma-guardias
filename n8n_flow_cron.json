@@ -1,0 +1,133 @@
+{
+  "name": "Guardias - Slack Autorotación (Lunes 08:00)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://firestore.googleapis.com/v1/projects/guardias-8d35d/databases/(default)/documents/config/rotation",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-firebase",
+      "name": "Obtener Rotacion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fields = $input.first().json.fields;\nif (!fields || !fields.agents || !fields.agents.arrayValue || !fields.agents.arrayValue.values) return { error: 'No config found or agents empty' };\n\nconst currentIndex = parseInt(fields.currentIndex ? fields.currentIndex.integerValue : 0);\nconst agents = fields.agents.arrayValue.values.map(v => v.stringValue);\nif (agents.length === 0) return { error: 'Agents list is empty' };\n\nconst currentAgent = agents[currentIndex % agents.length];\n\nreturn {\n  currentIndex,\n  agents,\n  currentAgent,\n  total: agents.length\n};"
+      },
+      "id": "process-data",
+      "name": "Procesar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "chat",
+        "operation": "postMessage",
+        "channel": "#team-guardia",
+        "text": "=Buen día! La guardia esta semana le corresponde a: {{ $json.currentAgent }}",
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "section",
+              "text": {
+                "text": "=*Buen día!* 🛡️\\nLa guardia de esta semana (desde hoy Lunes 08:00 hasta el próximo Lunes 08:00) le corresponde por lista a: *{{ $json.currentAgent }}*.\\n\\n¿Es correcto?",
+                "type": "mrkdwn"
+              }
+            },
+            {
+              "type": "actions",
+              "elements": {
+                "elementsValues": [
+                  {
+                    "type": "button",
+                    "text": "Sí, confirmar ✅",
+                    "style": "primary",
+                    "actionId": "confirm_guard",
+                    "value": "=yes_{{ $json.currentIndex }}"
+                  },
+                  {
+                    "type": "button",
+                    "text": "No, pasar al siguiente ⏭️",
+                    "style": "danger",
+                    "actionId": "skip_guard",
+                    "value": "=no_{{ $json.currentIndex }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "slack-msg",
+      "name": "Enviar a Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [600, 0]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Obtener Rotacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Rotacion": {
+      "main": [
+        [
+          {
+            "node": "Procesar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar": {
+      "main": [
+        [
+          {
+            "node": "Enviar a Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

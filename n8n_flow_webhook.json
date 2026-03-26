@@ -1,0 +1,398 @@
+{
+  "name": "Guardias - Interactivity Webhook (Slack Clicks)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-interactivity",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "if (!$input.first().json.body || !$input.first().json.body.payload) return { action: 'error' };\n\nconst payload = JSON.parse($input.first().json.body.payload);\nconst responseUrl = payload.response_url;\nconst actionValue = payload.actions[0].value;\nconst [action, indexStr] = actionValue.split('_');\nconst index = parseInt(indexStr);\nconst user = payload.user.username;\n\nreturn {\n  action,\n  index,\n  responseUrl,\n  user\n};"
+      },
+      "id": "parse-payload",
+      "name": "Parse Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "rule-yes",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "yes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "rule-no",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "no",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://firestore.googleapis.com/v1/projects/guardias-8d35d/databases/(default)/documents/config/rotation",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-firebase-no",
+      "name": "Obtener Firebase (Si es No)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, -200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fields = $input.first().json.fields;\nconst agents = fields.agents.arrayValue.values.map(v => v.stringValue);\nconst passedIndex = $('Parse Payload').first().json.index;\n\n// Incrementar índice\nconst nextIndex = (passedIndex + 1) % agents.length;\nconst nextAgent = agents[nextIndex];\n\nreturn {\n  nextIndex,\n  nextAgent,\n  responseUrl: $('Parse Payload').first().json.responseUrl,\n  user: $('Parse Payload').first().json.user\n};"
+      },
+      "id": "increment-index",
+      "name": "Incrementar Index",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, -200]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://firestore.googleapis.com/v1/projects/guardias-8d35d/databases/(default)/documents/config/rotation?updateMask.fieldPaths=currentIndex&key=AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "={{ { \"currentIndex\": { \"integerValue\": String($json.nextIndex) } } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "patch-firebase",
+      "name": "Actualizar Firebase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, -200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "blocks",
+              "value": "=[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"~Saltado por @{{ $('Parse Payload').first().json.user }}~\\n\\nEntonces el siguiente en la lista es: *{{ $('Incrementar Index').first().json.nextAgent }}*.\\n\\n¿Es correcto?\"}},{\"type\":\"actions\",\"elements\":[{\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"Sí, confirmar ✅\"},\"style\":\"primary\",\"value\":\"yes_{{ $('Incrementar Index').first().json.nextIndex }}\"},{\"type\":\"button\",\"text\":{\"type\":\"plain_text\",\"text\":\"No, pasar al siguiente ⏭️\"},\"style\":\"danger\",\"value\":\"no_{{ $('Incrementar Index').first().json.nextIndex }}\"}]}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack-update-no",
+      "name": "Actualizar Mensaje Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1200, -200]
+    },
+    {
+      "parameters": {
+        "url": "https://firestore.googleapis.com/v1/projects/guardias-8d35d/databases/(default)/documents/config/rotation",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-firebase-yes",
+      "name": "Obtener Firebase (Si es Sí)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fields = $input.first().json.fields;\nconst agents = fields.agents.arrayValue.values.map(v => v.stringValue);\nconst passedIndex = $('Parse Payload').first().json.index;\nconst confirmedAgent = agents[passedIndex];\n\n// Lunes actual a Próximo Lunes\nconst now = new Date();\nconst currentDay = now.getDay();\nconst diff = now.getDate() - currentDay + (currentDay === 0 ? -6 : 1);\nconst monday = new Date(now.setDate(diff));\n\nconst nextMonday = new Date(monday);\nnextMonday.setDate(monday.getDate() + 7);\n\nconst formatDt = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');\n\nconst startDate = formatDt(monday);\nconst endDate = formatDt(nextMonday);\nconst startTime = \"08:00\";\nconst endTime = \"08:00\";\nconst newId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);\nconst nextIndexForNextWeek = (passedIndex + 1) % agents.length;\n\nreturn {\n  confirmedAgent,\n  startDate,\n  endDate,\n  startTime,\n  endTime,\n  newId,\n  nextIndexForNextWeek,\n  responseUrl: $('Parse Payload').first().json.responseUrl,\n  user: $('Parse Payload').first().json.user\n};"
+      },
+      "id": "prepare-guard",
+      "name": "Preparar Guardia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 200]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://firestore.googleapis.com/v1/projects/guardias-8d35d/databases/(default)/documents/config/rotation?updateMask.fieldPaths=currentIndex&key=AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "={{ { \"currentIndex\": { \"integerValue\": String($json.nextIndexForNextWeek) } } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "patch-firebase-yes",
+      "name": "Avanzar Puntero",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [950, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://firestore.googleapis.com/v1/projects/guardias-8d35d/databases/(default)/documents/guards/{{ $json.newId }}?key=AIzaSyC9WliyMGH8ovRFD8XjrqOv7Y06rdbWzMs",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "={{ { \"agentName\": { \"stringValue\": $json.confirmedAgent }, \"startDate\": { \"stringValue\": $json.startDate }, \"endDate\": { \"stringValue\": $json.endDate }, \"startTime\": { \"stringValue\": $json.startTime }, \"endTime\": { \"stringValue\": $json.endTime }, \"id\": { \"stringValue\": $json.newId } } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-guard-firebase",
+      "name": "Guardar en Web",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Preparar Guardia').first().json.responseUrl }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "blocks",
+              "value": "=[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"✅ *¡Guardia Confirmada!*\\nAsignada a: *{{ $('Preparar Guardia').first().json.confirmedAgent }}*\\nDesde: {{ $('Preparar Guardia').first().json.startDate }} 08:00hs hasta {{ $('Preparar Guardia').first().json.endDate }} 08:00hs.\\n_(Confirmado por @{{ $('Preparar Guardia').first().json.user }})_\"}}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack-update-yes",
+      "name": "Mensaje Confirmado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendarId": "yazmin.loliger@gmail.com",
+        "start": "={{ $('Preparar Guardia').first().json.startDate }}T{{ $('Preparar Guardia').first().json.startTime }}:00-03:00",
+        "end": "={{ $('Preparar Guardia').first().json.endDate }}T{{ $('Preparar Guardia').first().json.endTime }}:00-03:00",
+        "summary": "={{ $('Preparar Guardia').first().json.confirmedAgent }}",
+        "options": {
+          "description": "=Guardia confirmada vía Slack.\\nDesde: {{ $('Preparar Guardia').first().json.startDate }} a las {{ $('Preparar Guardia').first().json.startTime }}\\nHasta: {{ $('Preparar Guardia').first().json.endDate }} a las {{ $('Preparar Guardia').first().json.endTime }}"
+        }
+      },
+      "id": "calendar-create",
+      "name": "Crear Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1400, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Payload": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Obtener Firebase (Si es Sí)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Obtener Firebase (Si es No)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Firebase (Si es No)": {
+      "main": [
+        [
+          {
+            "node": "Incrementar Index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incrementar Index": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Firebase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Firebase": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Mensaje Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Firebase (Si es Sí)": {
+      "main": [
+        [
+          {
+            "node": "Preparar Guardia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Guardia": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Web",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Avanzar Puntero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Web": {
+      "main": [
+        [
+          {
+            "node": "Mensaje Confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje Confirmado": {
+      "main": [
+        [
+          {
+            "node": "Crear Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
